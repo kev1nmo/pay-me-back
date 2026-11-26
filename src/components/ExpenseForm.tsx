@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
-import type { Group } from '../types';
+import type { Group, GroupActions } from '../types';
 import type { RateTable } from '../rates';
 import { rateToBase } from '../rates';
 import { formatMoney } from '../money';
-import { newId, today } from '../storage';
+import { today } from '../util';
 import CurrencySelect from './CurrencySelect';
 
 type Props = {
   group: Group;
   rates: { table: RateTable | null; error: string | null; loading: boolean };
-  updateGroup: (fn: (g: Group) => Group) => void;
+  actions: GroupActions;
 };
 
 const fmtRate = (r: number) => String(Number(r.toPrecision(6)));
 
-export default function ExpenseForm({ group, rates, updateGroup }: Props) {
+export default function ExpenseForm({ group, rates, actions }: Props) {
   const base = group.baseCurrency;
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -25,6 +25,7 @@ export default function ExpenseForm({ group, rates, updateGroup }: Props) {
   // Track who's *excluded* so newly added people are included by default.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [date, setDate] = useState(today);
+  const [saving, setSaving] = useState(false);
 
   const liveRate = rateToBase(rates.table, currency);
 
@@ -64,29 +65,26 @@ export default function ExpenseForm({ group, rates, updateGroup }: Props) {
       return next;
     });
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
-    updateGroup((g) => ({
-      ...g,
-      expenses: [
-        ...g.expenses,
-        {
-          id: newId(),
-          description: description.trim(),
-          amount: amountNum,
-          currency,
-          rate: currency === base ? 1 : rateNum,
-          paidBy,
-          participants,
-          date,
-          kind: 'expense',
-        },
-      ],
-    }));
-    setDescription('');
-    setAmount('');
-    setRateEdited(false);
+    if (!valid || saving) return;
+    setSaving(true);
+    const ok = await actions.addExpense({
+      description: description.trim(),
+      amount: amountNum,
+      currency,
+      rate: currency === base ? 1 : rateNum,
+      paidBy,
+      participants,
+      date,
+      kind: 'expense',
+    });
+    setSaving(false);
+    if (ok) {
+      setDescription('');
+      setAmount('');
+      setRateEdited(false);
+    }
   };
 
   return (
@@ -207,8 +205,8 @@ export default function ExpenseForm({ group, rates, updateGroup }: Props) {
         )}
       </fieldset>
 
-      <button type="submit" disabled={!valid}>
-        Add expense
+      <button type="submit" disabled={!valid || saving}>
+        {saving ? 'Saving…' : 'Add expense'}
       </button>
     </form>
   );

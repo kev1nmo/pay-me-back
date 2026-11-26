@@ -1,12 +1,13 @@
-import type { Group } from '../types';
+import type { Group, GroupActions } from '../types';
 import { expenseInBase, formatMoney, fromMinor } from '../money';
 
-type Props = { group: Group; updateGroup: (fn: (g: Group) => Group) => void };
+type Props = { group: Group; actions: GroupActions };
 
-export default function ExpenseList({ group, updateGroup }: Props) {
+export default function ExpenseList({ group, actions }: Props) {
   const base = group.baseCurrency;
   const name = (id: string) => group.members.find((m) => m.id === id)?.name ?? '?';
-  const sorted = [...group.expenses].sort((a, b) => b.date.localeCompare(a.date));
+  // Newest date first; within a date, most recently added first.
+  const sorted = [...group.expenses].reverse().sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <section className="card">
@@ -40,8 +41,7 @@ export default function ExpenseList({ group, updateGroup }: Props) {
                   className="icon"
                   aria-label={`Delete ${e.description}`}
                   onClick={() => {
-                    if (confirm(`Delete "${e.description}"?`))
-                      updateGroup((g) => ({ ...g, expenses: g.expenses.filter((x) => x.id !== e.id) }));
+                    if (confirm(`Delete "${e.description}" for everyone?`)) actions.deleteExpense(e.id);
                   }}
                 >
                   🗑

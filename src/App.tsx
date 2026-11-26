@@ -1,84 +1,147 @@
-import { useEffect, useState } from 'react';
-import type { AppState, Group } from './types';
-import { loadState, newId, saveState } from './storage';
+import { useCallback, useEffect, useState } from 'react';
+import { createGroup, ensureSession, listMyGroups } from './api';
+import { isConfigured } from './supabase';
+import type { GroupSummary } from './types';
+import { errorMessage } from './util';
 import NewGroupForm from './components/NewGroupForm';
 import GroupView from './components/GroupView';
 
+type Route = { page: 'home' } | { page: 'new' } | { page: 'group'; id: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseHash(hash: string): Route {
+  if (hash === '#/new') return { page: 'new' };
+  const m = hash.match(/^#\/g\/([^/?]+)/);
+  if (m && UUID.test(m[1])) return { page: 'group', id: m[1].toLowerCase() };
+  return { page: 'home' };
+}
+
+function useRoute(): Route {
+  const [route, setRoute] = useState(() => parseHash(location.hash));
+  useEffect(() => {
+    const onChange = () => setRoute(parseHash(location.hash));
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return route;
+}
+
+const go = (hash: string) => {
+  location.hash = hash;
+};
+
 export default function App() {
-  const [state, setState] = useState<AppState>(loadState);
-  const [creating, setCreating] = useState(false);
-
-  useEffect(() => saveState(state), [state]);
-
-  const group = state.groups.find((g) => g.id === state.activeGroupId) ?? null;
-  const showCreate = creating || state.groups.length === 0;
-
-  const updateGroup = (fn: (g: Group) => Group) =>
-    setState((s) => ({ ...s, groups: s.groups.map((g) => (g.id === s.activeGroupId ? fn(g) : g)) }));
-
-  const createGroup = (name: string, baseCurrency: string, memberNames: string[]) => {
-    const g: Group = {
-      id: newId(),
-      name,
-      baseCurrency,
-      members: memberNames.map((n) => ({ id: newId(), name: n })),
-      expenses: [],
-      createdAt: new Date().toISOString(),
-    };
-    setState((s) => ({ ...s, groups: [...s.groups, g], activeGroupId: g.id }));
-    setCreating(false);
-  };
-
-  const deleteGroup = () =>
-    setState((s) => {
-      const groups = s.groups.filter((g) => g.id !== s.activeGroupId);
-      return { ...s, groups, activeGroupId: groups[0]?.id ?? null };
-    });
-
   return (
     <div className="app">
+      {isConfigured ? (
+        <ConfiguredApp />
+      ) : (
+        <>
+          <header className="topbar">
+            <h1>💸 Pay Me Back</h1>
+          </header>
+          <div className="card narrow">
+            <h2>Database not configured</h2>
+            <p className="muted">
+              Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> (see README), then
+              restart.
+            </p>
+          </div>
+        </>
+      )}
+      <footer>
+        Anyone with a group's link can view and add expenses to it.{' '}
+        <a href="https://www.exchangerate-api.com">Rates by Exchange Rate API</a>
+      </footer>
+    </div>
+  );
+}
+
+function ConfiguredApp() {
+  const route = useRoute();
+  const [session, setSession] = useState<'loading' | 'ready' | { error: string }>('loading');
+  const [groups, setGroups] = useState<GroupSummary[] | null>(null);
+
+  const refreshGroups = useCallback(() => {
+    listMyGroups().then(setGroups).catch(() => setGroups((g) => g ?? []));
+  }, []);
+
+  useEffect(() => {
+    ensureSession()
+      .then(() => {
+        setSession('ready');
+        refreshGroups();
+      })
+      .catch((e) => setSession({ error: errorMessage(e) }));
+  }, [refreshGroups]);
+
+  // Home: jump to your first group, or start a new one.
+  useEffect(() => {
+    if (route.page === 'home' && groups && groups.length > 0) location.replace(`#/g/${groups[0].id}`);
+  }, [route, groups]);
+
+  const handleCreate = async (name: string, base: string, members: string[]) => {
+    const id = await createGroup(name, base, members);
+    refreshGroups();
+    go(`/g/${id}`);
+  };
+
+  const currentId = route.page === 'group' ? route.id : '';
+  const pickerGroups = groups ?? [];
+
+  let body: React.ReactNode;
+  if (session === 'loading') body = <p className="muted center-text">Loading…</p>;
+  else if (session !== 'ready') body = <div className="card narrow error">{session.error}</div>;
+  else if (route.page === 'group')
+    body = (
+      <GroupView
+        key={route.id}
+        groupId={route.id}
+        onChanged={refreshGroups}
+        onDeleted={() => {
+          setGroups((gs) => gs?.filter((g) => g.id !== route.id) ?? null);
+          refreshGroups();
+          go('/');
+        }}
+      />
+    );
+  else if (route.page === 'new' || (groups && groups.length === 0))
+    body = (
+      <NewGroupForm
+        onCreate={handleCreate}
+        onCancel={pickerGroups.length > 0 ? () => history.back() : undefined}
+      />
+    );
+  else body = <p className="muted center-text">Loading…</p>;
+
+  return (
+    <>
       <header className="topbar">
-        <h1>💸 Pay Me Back</h1>
-        {state.groups.length > 0 && (
+        <h1>
+          <a href="#/" className="home-link">
+            💸 Pay Me Back
+          </a>
+        </h1>
+        {session === 'ready' && pickerGroups.length > 0 && (
           <div className="group-picker">
-            <select
-              aria-label="Group"
-              value={showCreate ? '' : (state.activeGroupId ?? '')}
-              onChange={(e) => {
-                setCreating(false);
-                setState((s) => ({ ...s, activeGroupId: e.target.value }));
-              }}
-            >
-              {showCreate && <option value="">New group…</option>}
-              {state.groups.map((g) => (
+            <select aria-label="Your groups" value={currentId} onChange={(e) => go(`/g/${e.target.value}`)}>
+              {!pickerGroups.some((g) => g.id === currentId) && <option value="">Choose a group…</option>}
+              {pickerGroups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
                 </option>
               ))}
             </select>
-            {!showCreate && (
-              <button className="secondary" onClick={() => setCreating(true)}>
+            {route.page !== 'new' && (
+              <button className="secondary" onClick={() => go('/new')}>
                 + New group
               </button>
             )}
           </div>
         )}
       </header>
-
-      <main>
-        {showCreate ? (
-          <NewGroupForm
-            onCreate={createGroup}
-            onCancel={state.groups.length > 0 ? () => setCreating(false) : undefined}
-          />
-        ) : group ? (
-          <GroupView group={group} updateGroup={updateGroup} onDelete={deleteGroup} />
-        ) : null}
-      </main>
-
-      <footer>
-        Data stays in this browser. <a href="https://www.exchangerate-api.com">Rates by Exchange Rate API</a>
-      </footer>
-    </div>
+      <main>{body}</main>
+    </>
   );
 }

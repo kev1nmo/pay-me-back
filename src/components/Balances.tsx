@@ -1,10 +1,10 @@
-import type { Group } from '../types';
+import type { Group, GroupActions } from '../types';
 import { computeBalances, expenseInBase, formatMoney, fromMinor, settleUp } from '../money';
-import { newId, today } from '../storage';
+import { today } from '../util';
 
-type Props = { group: Group; updateGroup: (fn: (g: Group) => Group) => void };
+type Props = { group: Group; actions: GroupActions };
 
-export default function Balances({ group, updateGroup }: Props) {
+export default function Balances({ group, actions }: Props) {
   const base = group.baseCurrency;
   const balances = computeBalances(group);
   const transfers = settleUp(balances);
@@ -16,23 +16,16 @@ export default function Balances({ group, updateGroup }: Props) {
     .reduce((sum, e) => sum + expenseInBase(e, base), 0);
 
   const markPaid = (from: string, to: string, minor: number) =>
-    updateGroup((g) => ({
-      ...g,
-      expenses: [
-        ...g.expenses,
-        {
-          id: newId(),
-          description: `${name(from)} paid ${name(to)}`,
-          amount: fromMinor(minor, base),
-          currency: base,
-          rate: 1,
-          paidBy: from,
-          participants: [to],
-          date: today(),
-          kind: 'payment',
-        },
-      ],
-    }));
+    actions.addExpense({
+      description: `${name(from)} paid ${name(to)}`,
+      amount: fromMinor(minor, base),
+      currency: base,
+      rate: 1,
+      paidBy: from,
+      participants: [to],
+      date: today(),
+      kind: 'payment',
+    });
 
   return (
     <section className="card">

@@ -16,6 +16,8 @@ export type Expense = {
   kind?: 'expense' | 'payment';
 };
 
+export type NewExpense = Omit<Expense, 'id'>;
+
 export type Group = {
   id: string;
   name: string;
@@ -25,8 +27,15 @@ export type Group = {
   createdAt: string;
 };
 
-export type AppState = {
-  version: 1;
-  groups: Group[];
-  activeGroupId: string | null;
+export type GroupSummary = { id: string; name: string };
+
+/** Everything a group page can change. Each returns true on success (errors are shown by GroupView). */
+export type GroupActions = {
+  addMember: (name: string) => Promise<boolean>;
+  removeMember: (id: string) => Promise<boolean>;
+  addExpense: (e: NewExpense) => Promise<boolean>;
+  deleteExpense: (id: string) => Promise<boolean>;
+  rename: (name: string) => Promise<boolean>;
+  setBaseCurrency: (code: string) => Promise<boolean>;
+  deleteGroup: () => Promise<boolean>;
 };

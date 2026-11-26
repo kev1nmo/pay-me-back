@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { Group } from '../types';
-import { newId } from '../storage';
+import type { Group, GroupActions } from '../types';
 
-type Props = { group: Group; updateGroup: (fn: (g: Group) => Group) => void };
+type Props = { group: Group; actions: GroupActions };
 
-export default function Members({ group, updateGroup }: Props) {
+export default function Members({ group, actions }: Props) {
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
   const trimmed = name.trim();
   const duplicate = group.members.some((m) => m.name.toLowerCase() === trimmed.toLowerCase());
 
@@ -24,10 +24,8 @@ export default function Members({ group, updateGroup }: Props) {
               className="chip-x"
               aria-label={`Remove ${m.name}`}
               disabled={isUsed(m.id)}
-              title={isUsed(m.id) ? 'Part of an expense — delete those first' : 'Remove'}
-              onClick={() =>
-                updateGroup((g) => ({ ...g, members: g.members.filter((x) => x.id !== m.id) }))
-              }
+              title={isUsed(m.id) ? 'Part of an expense. Delete those first.' : 'Remove'}
+              onClick={() => actions.removeMember(m.id)}
             >
               ×
             </button>
@@ -36,15 +34,16 @@ export default function Members({ group, updateGroup }: Props) {
       </ul>
       <form
         className="row"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (!trimmed || duplicate) return;
-          updateGroup((g) => ({ ...g, members: [...g.members, { id: newId(), name: trimmed }] }));
-          setName('');
+          if (!trimmed || duplicate || busy) return;
+          setBusy(true);
+          if (await actions.addMember(trimmed)) setName('');
+          setBusy(false);
         }}
       >
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Add a person" aria-label="Name" />
-        <button type="submit" disabled={!trimmed || duplicate}>
+        <button type="submit" disabled={!trimmed || duplicate || busy}>
           Add
         </button>
       </form>
