@@ -191,6 +191,14 @@ grant execute on function public.create_group(text, text, text[]) to authenticat
 grant execute on function public.join_group(uuid) to authenticated;
 grant execute on function public.has_group_access(uuid) to authenticated;
 
+-- ── Table privileges ────────────────────────────────────────────────────────────────
+-- Newer Supabase projects don't expose new tables to the API automatically. Logged-in
+-- (including anonymous) users get table access here; RLS above decides which rows.
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.groups, public.members, public.expenses to authenticated;
+grant select, delete on public.group_access to authenticated;
+
 -- ── Realtime ────────────────────────────────────────────────────────────────────────
 
 alter publication supabase_realtime add table public.groups, public.members, public.expenses;
