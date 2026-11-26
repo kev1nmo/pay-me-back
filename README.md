@@ -20,6 +20,8 @@ The page updates live.
 ## Setup
 1. Create a free project at [supabase.com](https://supabase.com).
 2. **SQL Editor → New query**: paste [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
+   Then do the same with [`supabase/migrations/002_auto_delete.sql`](supabase/migrations/002_auto_delete.sql)
+   (deletes groups after 6 months with no activity, checked daily by `pg_cron`).
 3. **Authentication → Sign In / Providers**: turn on **Allow anonymous sign-ins**.
 4. Copy `.env.example` to `.env.local` and fill in the Project URL and publishable key
    (**Project Settings → API Keys**, or the **Connect** button).
