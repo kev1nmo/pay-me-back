@@ -292,3 +292,13 @@ code { font-size: 0.85em; background: var(--field); padding: 1px 5px; border-rad
 
 details.card button.danger { margin-top: 12px; }
 .amt-word { font-weight: 600; font-size: 0.85em; opacity: 0.85; }
+
+/* Settings: a little more room between the name row and the currency picker */
+details.card > label { margin-top: 6px; }
+
+/* Phones: breathing room above the header (respecting the notch / status bar) */
+@media (max-width: 600px) {
+  .app { padding-top: calc(env(safe-area-inset-top, 0px) + 36px); }
+  /* iOS zooms the page in when focusing inputs under 16px, which shifts everything down */
+  input, select { font-size: 16px; }
+}
