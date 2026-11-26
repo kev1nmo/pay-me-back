@@ -202,3 +202,14 @@ grant select, delete on public.group_access to authenticated;
 -- ── Realtime ────────────────────────────────────────────────────────────────────────
 
 alter publication supabase_realtime add table public.groups, public.members, public.expenses;
+
+-- ── Keep-alive ──────────────────────────────────────────────────────────────────────
+-- Called every few days by .github/workflows/keep-alive.yml so the free project
+-- doesn't pause from inactivity. Reads no data.
+
+create function public.ping() returns boolean
+language sql stable set search_path = ''
+as $$ select true $$;
+
+revoke execute on function public.ping() from public;
+grant execute on function public.ping() to anon, authenticated;

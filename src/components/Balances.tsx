@@ -1,6 +1,9 @@
+import { AnimatePresence, motion } from 'motion/react';
 import type { Group, GroupActions } from '../types';
-import { computeBalances, expenseInBase, formatMoney, fromMinor, settleUp } from '../money';
+import { computeBalances, expenseInBase, fromMinor, settleUp } from '../money';
 import { today } from '../util';
+import { burst, enter, EASE, rowMotion } from '../fx';
+import AnimatedMoney from './AnimatedMoney';
 
 type Props = { group: Group; actions: GroupActions };
 
@@ -9,16 +12,18 @@ export default function Balances({ group, actions }: Props) {
   const balances = computeBalances(group);
   const transfers = settleUp(balances);
   const name = (id: string) => group.members.find((m) => m.id === id)?.name ?? '?';
-  const fmt = (minor: number) => formatMoney(fromMinor(minor, base), base);
+  const major = (minor: number) => fromMinor(minor, base);
+  const maxAbs = Math.max(1, ...Object.values(balances).map(Math.abs));
 
   const totalSpent = group.expenses
     .filter((e) => e.kind !== 'payment')
     .reduce((sum, e) => sum + expenseInBase(e, base), 0);
 
-  const markPaid = (from: string, to: string, minor: number) =>
+  const markPaid = (from: string, to: string, minor: number, button: HTMLElement) => {
+    burst(button, 18);
     actions.addExpense({
       description: `${name(from)} paid ${name(to)}`,
-      amount: fromMinor(minor, base),
+      amount: major(minor),
       currency: base,
       rate: 1,
       paidBy: from,
@@ -26,49 +31,86 @@ export default function Balances({ group, actions }: Props) {
       date: today(),
       kind: 'payment',
     });
+  };
 
   return (
-    <section className="card">
-      <div className="row between">
-        <h2>Balances</h2>
-        <span className="muted">Total spent: {fmt(totalSpent)}</span>
+    <motion.section className="card" {...enter(3)}>
+      <div>
+        <div className="total-label">Total spent</div>
+        <AnimatedMoney className="total" value={major(totalSpent)} currency={base} />
       </div>
 
-      {group.members.length === 0 ? (
-        <p className="muted">No one here yet.</p>
-      ) : (
+      {group.members.length > 0 && (
         <ul className="balances">
           {group.members.map((m) => {
             const v = balances[m.id] ?? 0;
+            const pct = (Math.abs(v) / maxAbs) * 50;
             return (
-              <li key={m.id}>
-                <span>{m.name}</span>
-                <span className={v > 0 ? 'pos' : v < 0 ? 'neg' : 'muted'}>
-                  {v > 0 ? `gets back ${fmt(v)}` : v < 0 ? `owes ${fmt(-v)}` : 'settled'}
+              <li key={m.id} className="balance-row">
+                <span className="who">{m.name}</span>
+                <span className={`amt ${v > 0 ? 'pos' : v < 0 ? 'neg' : 'muted'}`}>
+                  {v === 0 ? (
+                    'settled'
+                  ) : (
+                    <>
+                      <span className="amt-word">{v > 0 ? 'gets ' : 'owes '}</span>
+                      <AnimatedMoney value={major(Math.abs(v))} currency={base} />
+                    </>
+                  )}
                 </span>
+                <div className="bar">
+                  <motion.div
+                    className={`bar-fill ${v >= 0 ? 'pos' : 'neg'}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.8, ease: EASE }}
+                  />
+                </div>
               </li>
             );
           })}
         </ul>
       )}
 
-      <h3>Settle up</h3>
-      {transfers.length === 0 ? (
-        <p className="muted">{group.expenses.length ? 'Everyone is square. 🎉' : 'Add an expense to see who owes whom.'}</p>
-      ) : (
-        <ul className="transfers">
-          {transfers.map((t) => (
-            <li key={`${t.from}-${t.to}`}>
-              <span>
-                <strong>{name(t.from)}</strong> pays <strong>{name(t.to)}</strong> {fmt(t.amount)}
-              </span>
-              <button className="secondary small" onClick={() => markPaid(t.from, t.to, t.amount)}>
-                Mark paid
-              </button>
-            </li>
-          ))}
-        </ul>
+      {group.expenses.length > 0 && (
+        <>
+          <h3>Settle up</h3>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {transfers.length === 0 ? (
+              <motion.div
+                key="square"
+                className="square"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+              >
+                All square 🎉
+              </motion.div>
+            ) : (
+              <motion.ul key="list" className="transfers" exit={{ opacity: 0 }}>
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {transfers.map((t) => (
+                    <motion.li key={`${t.from}-${t.to}`} layout {...rowMotion}>
+                      <span className="transfer-text">
+                        <strong>{name(t.from)}</strong>
+                        <span className="arrow">→</span>
+                        <strong>{name(t.to)}</strong>
+                        <AnimatedMoney className="transfer-amt" value={major(t.amount)} currency={base} />
+                      </span>
+                      <button
+                        className="secondary small"
+                        onClick={(e) => markPaid(t.from, t.to, t.amount, e.currentTarget)}
+                      >
+                        Paid
+                      </button>
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </>
       )}
-    </section>
+    </motion.section>
   );
 }

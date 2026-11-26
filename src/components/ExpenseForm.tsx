@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { Group, GroupActions } from '../types';
 import type { RateTable } from '../rates';
 import { rateToBase } from '../rates';
 import { formatMoney } from '../money';
 import { today } from '../util';
+import { burst, enter, EASE } from '../fx';
 import CurrencySelect from './CurrencySelect';
 
 type Props = {
@@ -26,6 +28,8 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [date, setDate] = useState(today);
   const [saving, setSaving] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+  const submitRef = useRef<HTMLButtonElement>(null);
 
   const liveRate = rateToBase(rates.table, currency);
 
@@ -41,14 +45,7 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
     if (!group.members.some((m) => m.id === paidBy)) setPaidBy(group.members[0]?.id ?? '');
   }, [group.members, paidBy]);
 
-  if (group.members.length === 0) {
-    return (
-      <section className="card">
-        <h2>Add an expense</h2>
-        <p className="muted">Add at least one person first.</p>
-      </section>
-    );
-  }
+  if (group.members.length === 0) return null;
 
   const participants = group.members.filter((m) => !excluded.has(m.id)).map((m) => m.id);
   const amountNum = Number(amount);
@@ -56,6 +53,7 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
   const valid =
     description.trim() !== '' && amountNum > 0 && rateNum > 0 && paidBy !== '' && participants.length > 0;
   const converted = amountNum > 0 && rateNum > 0 ? amountNum * rateNum : null;
+  const allIn = participants.length === group.members.length;
 
   const toggle = (id: string) =>
     setExcluded((s) => {
@@ -81,37 +79,36 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
     });
     setSaving(false);
     if (ok) {
+      burst(submitRef.current);
       setDescription('');
       setAmount('');
       setRateEdited(false);
+      setJustAdded(true);
+      setTimeout(() => setJustAdded(false), 1400);
     }
   };
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>Add an expense</h2>
-
-      <label>
-        What for?
-        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Dinner at Ichiran" />
-      </label>
+    <motion.form className="card" onSubmit={submit} {...enter(2)}>
+      <h2>Add expense</h2>
 
       <div className="row">
         <label className="grow">
           Amount
           <input
+            className="amount-input"
             type="number"
             inputMode="decimal"
             min="0"
             step="any"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
           />
         </label>
-        <label className="grow">
+        <label style={{ width: 110 }}>
           Currency
           <CurrencySelect
+            compact
             value={currency}
             onChange={(c) => {
               setCurrency(c);
@@ -121,46 +118,64 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
         </label>
       </div>
 
-      {currency !== base && (
-        <div className="rate-box">
-          <div className="row center">
-            <span>1 {currency} =</span>
-            <input
-              className="rate-input"
-              type="number"
-              step="any"
-              min="0"
-              value={rateInput}
-              onChange={(e) => {
-                setRateInput(e.target.value);
-                setRateEdited(true);
-              }}
-              aria-label={`Exchange rate ${currency} to ${base}`}
-            />
-            <span>{base}</span>
-          </div>
-          <small className="muted">
-            {rates.loading && 'Loading live rates…'}
-            {!rates.loading && rateEdited && liveRate && (
-              <>
-                Custom rate.{' '}
-                <button type="button" className="link" onClick={() => setRateEdited(false)}>
-                  Use live rate ({fmtRate(liveRate)})
-                </button>
-              </>
-            )}
-            {!rates.loading && !rateEdited && liveRate && rates.table &&
-              `Live rate, updated ${new Date(rates.table.updated).toLocaleDateString()}${rates.table.stale ? ' (offline — cached)' : ''}`}
-            {!rates.loading && !liveRate && (
-              <span className="error">
-                {rates.error ? `Couldn't load rates (${rates.error}).` : `No live rate for ${currency}.`} Enter the rate
-                manually.
-              </span>
-            )}
-          </small>
-          {converted !== null && <div className="converted">≈ {formatMoney(converted, base)}</div>}
-        </div>
-      )}
+      <label>
+        Description
+        <input value={description} onChange={(e) => setDescription(e.target.value)} />
+      </label>
+
+      <AnimatePresence initial={false}>
+        {currency !== base && (
+          <motion.div
+            className="rate-box"
+            initial={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', paddingTop: 12, paddingBottom: 12 }}
+            exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+          >
+            <div className="row center">
+              <span>1 {currency} =</span>
+              <input
+                className="rate-input"
+                type="number"
+                step="any"
+                min="0"
+                value={rateInput}
+                onChange={(e) => {
+                  setRateInput(e.target.value);
+                  setRateEdited(true);
+                }}
+                aria-label={`Exchange rate ${currency} to ${base}`}
+              />
+              <span>{base}</span>
+              <span className="grow" />
+              {converted !== null && (
+                <motion.span key={converted} className="converted" initial={{ scale: 1.15 }} animate={{ scale: 1 }}>
+                  {formatMoney(converted, base)}
+                </motion.span>
+              )}
+            </div>
+            <div className="rate-meta">
+              {rates.loading ? (
+                <span>…</span>
+              ) : rateEdited && liveRate ? (
+                <>
+                  <span>custom</span>
+                  <button type="button" className="link" onClick={() => setRateEdited(false)}>
+                    reset to {fmtRate(liveRate)}
+                  </button>
+                </>
+              ) : liveRate ? (
+                <span title={rates.table ? `Updated ${new Date(rates.table.updated).toLocaleString()}` : undefined}>
+                  <span className="live-dot" style={{ display: 'inline-block', marginRight: 6 }} />
+                  {rates.table?.stale ? 'cached rate' : 'live rate'}
+                </span>
+              ) : (
+                <span className="error">No live rate. Enter one.</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="row">
         <label className="grow">
@@ -179,35 +194,56 @@ export default function ExpenseForm({ group, rates, actions }: Props) {
         </label>
       </div>
 
-      <fieldset>
-        <legend>
-          Split equally between{' '}
-          <button
-            type="button"
-            className="link"
-            onClick={() => setExcluded(participants.length === group.members.length ? new Set(group.members.map((m) => m.id)) : new Set())}
-          >
-            {participants.length === group.members.length ? 'none' : 'all'}
-          </button>
-        </legend>
-        <div className="checks">
-          {group.members.map((m) => (
-            <label key={m.id} className="check">
-              <input type="checkbox" checked={!excluded.has(m.id)} onChange={() => toggle(m.id)} />
-              {m.name}
-            </label>
-          ))}
+      <div>
+        <div className="split-head">
+          <span>
+            Split ·{' '}
+            <button
+              type="button"
+              className="link"
+              onClick={() => setExcluded(allIn ? new Set(group.members.map((m) => m.id)) : new Set())}
+            >
+              {allIn ? 'none' : 'all'}
+            </button>
+          </span>
+          <AnimatePresence>
+            {participants.length > 0 && converted !== null && (
+              <motion.span
+                className="each"
+                key={participants.length}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+              >
+                {formatMoney(converted / participants.length, base)} each
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
-        {participants.length > 0 && converted !== null && (
-          <small className="muted">
-            {formatMoney(converted / participants.length, base)} each
-          </small>
-        )}
-      </fieldset>
+        <div className="pills" style={{ marginTop: 8 }}>
+          {group.members.map((m) => {
+            const on = !excluded.has(m.id);
+            return (
+              <motion.button
+                key={m.id}
+                type="button"
+                className={`pill ${on ? 'on' : ''}`}
+                aria-pressed={on}
+                onClick={() => toggle(m.id)}
+                whileTap={{ scale: 0.9 }}
+                layout
+              >
+                {on ? '✓ ' : ''}
+                {m.name}
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
 
-      <button type="submit" disabled={!valid || saving}>
-        {saving ? 'Saving…' : 'Add expense'}
+      <button ref={submitRef} type="submit" disabled={!valid || saving} className={justAdded ? 'success' : ''}>
+        {saving ? 'Saving…' : justAdded ? 'Added ✓' : 'Add expense'}
       </button>
-    </form>
+    </motion.form>
   );
 }

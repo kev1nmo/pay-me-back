@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { MotionConfig } from 'motion/react';
 import { createGroup, ensureSession, listMyGroups } from './api';
 import { isConfigured } from './supabase';
 import type { GroupSummary } from './types';
@@ -33,13 +34,14 @@ const go = (hash: string) => {
 
 export default function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <div className="app">
       {isConfigured ? (
         <ConfiguredApp />
       ) : (
         <>
           <header className="topbar">
-            <h1>💸 Pay Me Back</h1>
+            <Brand />
           </header>
           <div className="card narrow">
             <h2>Database not configured</h2>
@@ -51,12 +53,30 @@ export default function App() {
         </>
       )}
       <footer>
-        Anyone with a group's link can view and add expenses to it.{' '}
+        {/* Attribution is required by the free exchange-rate API's terms. */}
         <a href="https://www.exchangerate-api.com">Rates by Exchange Rate API</a>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
+
+function Brand() {
+  return (
+    <a href="#/" className="brand">
+      <span className="brand-mark">$</span>
+      <span>
+        Pay Me <span className="brand-accent">Back</span>
+      </span>
+    </a>
+  );
+}
+
+const Spinner = () => (
+  <div className="center-text">
+    <span className="spinner" aria-label="Loading" />
+  </div>
+);
 
 function ConfiguredApp() {
   const route = useRoute();
@@ -91,7 +111,7 @@ function ConfiguredApp() {
   const pickerGroups = groups ?? [];
 
   let body: React.ReactNode;
-  if (session === 'loading') body = <p className="muted center-text">Loading…</p>;
+  if (session === 'loading') body = <Spinner />;
   else if (session !== 'ready') body = <div className="card narrow error">{session.error}</div>;
   else if (route.page === 'group')
     body = (
@@ -113,16 +133,12 @@ function ConfiguredApp() {
         onCancel={pickerGroups.length > 0 ? () => history.back() : undefined}
       />
     );
-  else body = <p className="muted center-text">Loading…</p>;
+  else body = <Spinner />;
 
   return (
     <>
       <header className="topbar">
-        <h1>
-          <a href="#/" className="home-link">
-            💸 Pay Me Back
-          </a>
-        </h1>
+        <Brand />
         {session === 'ready' && pickerGroups.length > 0 && (
           <div className="group-picker">
             <select aria-label="Your groups" value={currentId} onChange={(e) => go(`/g/${e.target.value}`)}>
@@ -135,7 +151,7 @@ function ConfiguredApp() {
             </select>
             {route.page !== 'new' && (
               <button className="secondary" onClick={() => go('/new')}>
-                + New group
+                + New
               </button>
             )}
           </div>

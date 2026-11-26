@@ -5,12 +5,21 @@ type Props = {
   onChange: (code: string) => void;
   disabled?: boolean;
   id?: string;
+  /** Show just the code (e.g. "JPY") when closed; the open list still has full names. */
+  compact?: boolean;
 };
 
-export default function CurrencySelect({ value, onChange, disabled, id }: Props) {
+export default function CurrencySelect({ value, onChange, disabled, id, compact }: Props) {
   const common = COMMON_CURRENCIES.filter((c) => ALL_CURRENCIES.includes(c));
-  return (
-    <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+  const select = (
+    <select
+      id={id}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      title={currencyName(value)}
+      className={compact ? 'compact-select' : undefined}
+    >
       <optgroup label="Common">
         {common.map((c) => (
           <option key={c} value={c}>
@@ -26,5 +35,14 @@ export default function CurrencySelect({ value, onChange, disabled, id }: Props)
         ))}
       </optgroup>
     </select>
+  );
+  if (!compact) return select;
+  return (
+    <span className="compact-wrap">
+      {select}
+      <span className="compact-label" aria-hidden>
+        {value}
+      </span>
+    </span>
   );
 }

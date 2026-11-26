@@ -1,7 +1,12 @@
+import { AnimatePresence, motion } from 'motion/react';
 import type { Group, GroupActions } from '../types';
 import { expenseInBase, formatMoney, fromMinor } from '../money';
+import { enter, rowMotion } from '../fx';
 
 type Props = { group: Group; actions: GroupActions };
+
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 export default function ExpenseList({ group, actions }: Props) {
   const base = group.baseCurrency;
@@ -10,47 +15,46 @@ export default function ExpenseList({ group, actions }: Props) {
   const sorted = [...group.expenses].reverse().sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <section className="card">
+    <motion.section className="card" {...enter(4)}>
       <h2>History</h2>
       {sorted.length === 0 ? (
-        <p className="muted">Nothing yet.</p>
+        <div className="empty">—</div>
       ) : (
         <ul className="expenses">
-          {sorted.map((e) => {
-            const everyone = e.participants.length === group.members.length;
-            return (
-              <li key={e.id} className={e.kind === 'payment' ? 'payment' : ''}>
-                <div className="grow">
-                  <div className="desc">{e.kind === 'payment' ? '↪ ' : ''}{e.description}</div>
-                  <small className="muted">
-                    {e.date} ·{' '}
-                    {e.kind === 'payment'
-                      ? 'repayment'
-                      : `${name(e.paidBy)} paid · split ${everyone ? 'by everyone' : `with ${e.participants.map(name).join(', ')}`}`}
-                  </small>
-                </div>
-                <div className="amount">
-                  <div>{formatMoney(fromMinor(expenseInBase(e, base), base), base)}</div>
-                  {e.currency !== base && (
-                    <small className="muted">
-                      {formatMoney(e.amount, e.currency)} @ {Number(e.rate.toPrecision(4))}
-                    </small>
-                  )}
-                </div>
-                <button
-                  className="icon"
-                  aria-label={`Delete ${e.description}`}
-                  onClick={() => {
-                    if (confirm(`Delete "${e.description}" for everyone?`)) actions.deleteExpense(e.id);
-                  }}
-                >
-                  🗑
-                </button>
-              </li>
-            );
-          })}
+          <AnimatePresence mode="popLayout" initial={false}>
+            {sorted.map((e) => {
+              const payment = e.kind === 'payment';
+              const everyone = e.participants.length === group.members.length;
+              return (
+                <motion.li key={e.id} layout className={payment ? 'payment' : ''} {...rowMotion}>
+                  <span className="expense-icon">{payment ? '↪' : e.description.charAt(0).toUpperCase()}</span>
+                  <div className="grow">
+                    <div className="desc">{e.description}</div>
+                    <div className="meta">
+                      {shortDate(e.date)}
+                      {!payment &&
+                        ` · ${name(e.paidBy)} · ${everyone ? 'everyone' : e.participants.map(name).join(', ')}`}
+                    </div>
+                  </div>
+                  <div className="amount">
+                    {formatMoney(fromMinor(expenseInBase(e, base), base), base)}
+                    {e.currency !== base && <small>{formatMoney(e.amount, e.currency)}</small>}
+                  </div>
+                  <button
+                    className="icon"
+                    aria-label={`Delete ${e.description}`}
+                    onClick={() => {
+                      if (confirm(`Delete "${e.description}"?`)) actions.deleteExpense(e.id);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
         </ul>
       )}
-    </section>
+    </motion.section>
   );
 }

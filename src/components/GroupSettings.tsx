@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import type { Group, GroupActions } from '../types';
 import CurrencySelect from './CurrencySelect';
+import { enter } from '../fx';
 
 type Props = { group: Group; actions: GroupActions };
 
@@ -11,8 +13,8 @@ export default function GroupSettings({ group, actions }: Props) {
   const trimmed = name.trim();
 
   return (
-    <details className="card">
-      <summary>Group settings</summary>
+    <motion.details className="card" {...enter(5)}>
+      <summary>Settings</summary>
       <form
         className="row"
         onSubmit={(e) => {
@@ -28,20 +30,18 @@ export default function GroupSettings({ group, actions }: Props) {
           Save
         </button>
       </form>
-      <label>
-        Settle up in
+      <label title={locked ? 'Locked once expenses exist' : undefined}>
+        Currency
         <CurrencySelect value={group.baseCurrency} disabled={locked} onChange={(c) => actions.setBaseCurrency(c)} />
-        {locked && <small className="muted">Locked once expenses exist, because their rates are saved against it.</small>}
       </label>
       <button
         className="danger"
         onClick={() => {
-          if (confirm(`Delete "${group.name}" and all its expenses for everyone? This can't be undone.`))
-            actions.deleteGroup();
+          if (confirm(`Delete "${group.name}" for everyone?`)) actions.deleteGroup();
         }}
       >
         Delete group
       </button>
-    </details>
+    </motion.details>
   );
 }

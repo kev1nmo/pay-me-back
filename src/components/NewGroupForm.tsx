@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import CurrencySelect from './CurrencySelect';
+import PeopleInput from './PeopleInput';
 import { errorMessage } from '../util';
+import { enter } from '../fx';
 
 type Props = {
   onCreate: (name: string, baseCurrency: string, members: string[]) => Promise<void>;
@@ -10,47 +13,43 @@ type Props = {
 export default function NewGroupForm({ onCreate, onCancel }: Props) {
   const [name, setName] = useState('');
   const [base, setBase] = useState('USD');
-  const [people, setPeople] = useState('');
+  const [people, setPeople] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const names = [...new Set(people.split(',').map((s) => s.trim()).filter(Boolean))];
-
   return (
-    <form
-      className="card narrow"
+    <motion.form
+      {...enter()}
+      className="card narrow hero"
       onSubmit={async (e) => {
         e.preventDefault();
         if (!name.trim() || busy) return;
         setBusy(true);
         setError(null);
         try {
-          await onCreate(name.trim(), base, names);
+          await onCreate(name.trim(), base, people);
         } catch (err) {
           setError(errorMessage(err));
           setBusy(false);
         }
       }}
     >
-      <h2>Start a group</h2>
-      <p className="muted">A trip, a house, a dinner. You'll get a link to share with everyone.</p>
+      <h2>New group</h2>
       <label>
-        Group name
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tokyo trip 2026" required autoFocus />
+        Name
+        <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
       </label>
       <label>
-        Settle up in
+        Currency
         <CurrencySelect value={base} onChange={setBase} />
-        <small className="muted">Everyone's balance is shown in this currency.</small>
       </label>
-      <label>
-        Who's in?
-        <input value={people} onChange={(e) => setPeople(e.target.value)} placeholder="Alex, Sam, Jordan" />
-        <small className="muted">Comma-separated. Anyone can add more later.</small>
+      <label htmlFor="people">
+        People
+        <PeopleInput id="people" names={people} onChange={setPeople} />
       </label>
       {error && <small className="error">{error}</small>}
       <div className="row">
-        <button type="submit" disabled={!name.trim() || busy}>
+        <button type="submit" className="grow" disabled={!name.trim() || busy}>
           {busy ? 'Creating…' : 'Create group'}
         </button>
         {onCancel && (
@@ -59,6 +58,6 @@ export default function NewGroupForm({ onCreate, onCancel }: Props) {
           </button>
         )}
       </div>
-    </form>
+    </motion.form>
   );
 }

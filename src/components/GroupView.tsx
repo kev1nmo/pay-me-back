@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import * as api from '../api';
 import type { GroupActions } from '../types';
 import { useGroup } from '../useGroup';
@@ -27,13 +28,17 @@ export default function GroupView({ groupId, onChanged, onDeleted }: Props) {
     if (loadedName !== null) onChanged();
   }, [loadedName, onChanged]);
 
-  if (state.status === 'loading') return <p className="muted center-text">Loading group…</p>;
+  if (state.status === 'loading')
+    return (
+      <div className="center-text">
+        <span className="spinner" aria-label="Loading" />
+      </div>
+    );
   if (state.status === 'missing')
     return (
-      <div className="card narrow">
+      <div className="card narrow hero">
         <h2>Group not found</h2>
-        <p className="muted">This link may be wrong, or the group was deleted.</p>
-        <a href="#/new">Start a new group</a>
+        <button onClick={() => (location.hash = '/new')}>New group</button>
       </div>
     );
   if (state.status === 'error') return <div className="card narrow error">{state.message}</div>;
@@ -73,14 +78,22 @@ export default function GroupView({ groupId, onChanged, onDeleted }: Props) {
   return (
     <>
       <ShareBar group={group} />
-      {error && (
-        <div className="banner error" role="alert">
-          <span>{error}</span>
-          <button className="icon" aria-label="Dismiss" onClick={() => setError(null)}>
-            ✕
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            className="banner"
+            role="alert"
+            initial={{ opacity: 0, y: -8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -8, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
+          >
+            <span>{error}</span>
+            <button className="icon" aria-label="Dismiss" onClick={() => setError(null)}>
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <GroupBody group={group} actions={actions} />
     </>
   );
