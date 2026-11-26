@@ -28,8 +28,15 @@ function useRoute(): Route {
   return route;
 }
 
+/**
+ * In-app navigation: every new page starts at the top, instantly (the new page's fade-in
+ * hides the jump), with the phone keyboard closed. Browser Back/Forward don't go through
+ * here, so they keep the browser's own scroll behavior.
+ */
 const go = (hash: string) => {
+  (document.activeElement as HTMLElement | null)?.blur();
   location.hash = hash;
+  window.scrollTo(0, 0);
 };
 
 export default function App() {
